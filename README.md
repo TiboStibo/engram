@@ -28,7 +28,7 @@ Traditional databases store data as text/symbols. Vector databases store meaning
 - **No Keyword Limits**: Finds relevant information even without exact word matches
 - **Scalable Search**: FAISS enables millisecond search across millions of memories
 
-## 🛠️ Installation
+## 🛠️ Installation & Bootstrap
 
 ```bash
 # Create project directory and virtual environment
@@ -45,6 +45,36 @@ pip install -r requirements.txt
 # Or install manually for CPU-only systems:
 pip install numpy faiss-cpu torch --index-url https://download.pytorch.org/whl/cpu
 pip install transformers sentence-transformers dataclasses-json
+```
+
+### 🚀 Bootstrap for New Conversations
+
+**Always run this at the start of new conversations:**
+
+```bash
+# One-command bootstrap (recommended)
+./startup_memory.sh
+
+# Or bootstrap manually
+source .venv/bin/activate
+python bootstrap_memory.py
+```
+
+**This loads essential memories about how to use the system, ensuring persistent self-awareness even from fresh instances.**
+
+### 💻 Cursor IDE Integration
+
+**For real-time memory access during conversations:**
+
+```bash
+# Quick memory queries
+python quick_memory.py query "your topic"
+
+# Live conversation assistant
+python conversation_memory_assistant.py --live
+
+# Add memories during conversation
+python quick_memory.py add "insight" "tags" 0.8
 ```
 
 ### Hardware Compatibility ✅
