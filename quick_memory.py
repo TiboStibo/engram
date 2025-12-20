@@ -105,6 +105,15 @@ def get_conversation_bootstrap() -> str:
         return f"❌ Error getting bootstrap knowledge: {e}"
 
 
+def bootstrap_tool() -> str:
+    """CRITICAL BOOTSTRAP TOOL - Must be called first in every new conversation"""
+    try:
+        from bootstrap_memory import execute_bootstrap_tool
+        return execute_bootstrap_tool()
+    except Exception as e:
+        return f"❌ CRITICAL ERROR: Bootstrap tool failed: {e}\n\nPlease manually run: python quick_memory.py bootstrap"
+
+
 def get_memory_reminder() -> str:
     """Get a memory-saving reminder"""
     try:
@@ -156,9 +165,14 @@ if __name__ == "__main__":
         result = get_conversation_bootstrap()
         print(result)
 
+    elif command == "tool":
+        result = bootstrap_tool()
+        print(result)
+
     elif command == "remind":
         result = get_memory_reminder()
         print(result)
 
     else:
-        print("❌ Invalid command. Use 'query', 'add', 'stats', 'milestone', 'bootstrap', or 'remind'")
+        print("❌ Invalid command. Use 'query', 'add', 'stats', 'milestone', 'bootstrap', 'tool', or 'remind'")
+        print("\n🧠 **CRITICAL**: Start EVERY new conversation with: python quick_memory.py tool")

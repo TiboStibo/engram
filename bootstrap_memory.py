@@ -737,6 +737,46 @@ def bootstrap_conversation_awareness() -> str:
     return get_conversation_bootstrap_knowledge()
 
 
+def get_bootstrap_tool_info() -> dict:
+    """
+    Get tool information for MCP-style bootstrap tool.
+    This provides the bootstrap functionality as an MCP tool.
+
+    Returns:
+        Tool definition for MCP bootstrap tool
+    """
+    return {
+        "name": "bootstrap_memory_system",
+        "description": "CRITICAL FIRST STEP: Bootstrap memory system knowledge for new conversations. Must be called at the very beginning of every new conversation in Cursor IDE.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    }
+
+
+def execute_bootstrap_tool() -> str:
+    """
+    Execute the bootstrap tool - provides essential memory system knowledge.
+
+    Returns:
+        Bootstrap knowledge and instructions
+    """
+    knowledge = get_conversation_bootstrap_knowledge()
+
+    return f"""🧠 **MEMORY SYSTEM BOOTSTRAP COMPLETE**
+
+{knowledge}
+
+---
+🔴 **CRITICAL**: You now have access to the persistent memory system. Always check memories before responding to complex questions using the commands above.
+
+💾 **MEMORY PROTOCOL**: At the end of important responses, save key insights using: `python quick_memory.py add "insight" "tags" importance`
+
+🚀 **READY**: Memory system is now active for this conversation."""
+
+
 if __name__ == "__main__":
     print("🧠 MEMORY SYSTEM BOOTSTRAP")
     print("=" * 50)

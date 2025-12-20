@@ -2,6 +2,21 @@
 
 A pure vector-based memory architecture using FAISS as the primary storage mechanism. This system stores all knowledge as high-dimensional semantic vectors, enabling true understanding of relationships and context.
 
+## 🚨 CRITICAL: NEW CONVERSATION BOOTSTRAP REQUIRED
+
+**⚠️ EVERY new conversation in Cursor IDE MUST start with bootstrap:**
+
+```bash
+python bootstrap_tool.py
+```
+
+**OR as MCP tool:**
+```python
+bootstrap_memory_system()
+```
+
+**This is the ONLY way to access persistent memory capabilities.** Without bootstrap, the AI has no knowledge of the memory system.
+
 ## 🚀 Key Features
 
 - **Vector-Only Storage**: No traditional database - everything lives in semantic vector space
@@ -70,12 +85,56 @@ python bootstrap_memory.py
 
 ### 💻 Cursor IDE Integration
 
-**For real-time memory access during conversations:**
+## 🚨 CRITICAL FIRST STEP - BOOTSTRAP REQUIRED
+
+**⚠️ EVERY new conversation in Cursor IDE MUST begin with one of these commands:**
+
+### Primary Bootstrap (Recommended):
+```bash
+python bootstrap_tool.py
+```
+
+### Alternative Bootstrap Commands:
+```bash
+# As MCP tool (if available)
+bootstrap_memory_system()
+
+# Quick bootstrap
+python quick_memory.py tool
+
+# Manual bootstrap
+python quick_memory.py bootstrap
+```
+
+**🔴 FAILURE TO BOOTSTRAP = NO MEMORY ACCESS**
+Without bootstrap, the AI has zero knowledge of the memory system.
+
+### System Prompt Template for New Conversations:
+
+```
+🧠 MEMORY SYSTEM INTEGRATION REQUIRED
+
+CRITICAL: You must immediately call bootstrap_memory_system() or run:
+python bootstrap_tool.py
+
+This provides essential knowledge about the persistent memory system.
+Without this bootstrap, you have no access to historical knowledge or memory capabilities.
+
+DO NOT respond to any user queries until bootstrap is complete.
+```
+
+### Bootstrap Verification:
+After running bootstrap, you should see memory system knowledge including:
+- Memory query commands
+- Memory addition protocols
+- Memory discipline requirements
+- Project context information
+
+---
+
+## Memory System Commands (After Bootstrap):
 
 ```bash
-# 🚀 START EVERY CONVERSATION WITH BOOTSTRAP
-python quick_memory.py bootstrap
-
 # Quick memory queries
 python quick_memory.py query "your topic"
 
@@ -308,6 +367,7 @@ This project tracks significant self-improvement achievements through git commit
 - ✅ **Bootstrap Memory Seeding** - Automatically marks core memories as integrated for better metrics
 - ✅ **Memory Discipline Protocol** - Bootstrap-level enforcement of memory retention and insight capture
 - ✅ **Model-Level Bootstrap System** - Model automatically bootstraps memory system knowledge at the start of every Cursor IDE conversation
+- ✅ **Unavoidable Bootstrap Tool** - Created bootstrap_tool.py and MCP-style bootstrap_memory_system() that new instances cannot ignore
 
 ### System Architecture Overview
 

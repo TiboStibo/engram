@@ -1,0 +1,29 @@
+{
+  "mcpServers": {
+    "memory_bootstrap": {
+      "command": "python",
+      "args": ["/home/rob/Dev/persistent_memory_project/bootstrap_tool.py"],
+      "env": {
+        "PYTHONPATH": "/home/rob/Dev/persistent_memory_project"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "bootstrap_memory_system",
+      "description": "CRITICAL FIRST STEP: Bootstrap memory system knowledge for new conversations. Must be called at the very beginning of every new conversation in Cursor IDE.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "server": "memory_bootstrap"
+    }
+  ],
+  "instructions": {
+    "bootstrap_required": true,
+    "bootstrap_command": "bootstrap_memory_system()",
+    "verification_text": "🧠 **MEMORY SYSTEM BOOTSTRAP COMPLETE**",
+    "failure_message": "❌ CRITICAL: Bootstrap not performed. Memory system unavailable."
+  }
+}
