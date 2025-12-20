@@ -34,6 +34,7 @@ class MemoryBootstrap:
     def __init__(self, memory_path: str = "vector_memory", memory_system=None):
         self.memory_path = memory_path
         self.bootstrap_memories_file = Path(__file__).parent / "bootstrap_memories.json"
+        self.bootstrap_state_file = Path(__file__).parent / ".bootstrap_complete"
         self.memory_system = memory_system
         self.integration = None  # Will be set after MemoryIntegration is fully initialized
 
@@ -76,22 +77,30 @@ class MemoryBootstrap:
         print("🧠 INITIALIZING MEMORY SYSTEM BOOTSTRAP...")
         print("=" * 60)
 
-        # Initialize core memory system
-        self.integration = MemoryIntegration(memory_path=self.memory_path)
+        # Check if bootstrap is already complete
+        if self._is_bootstrap_complete():
+            print("ℹ️  Bootstrap already completed previously. Loading existing system...")
+            self.integration = MemoryIntegration(memory_path=self.memory_path)
+        else:
+            # Initialize core memory system
+            self.integration = MemoryIntegration(memory_path=self.memory_path)
 
-        # Load bootstrap memories
-        self._load_bootstrap_memories()
+            # Load bootstrap memories
+            self._load_bootstrap_memories()
 
-        # Verify system is working
-        self._verify_bootstrap()
+            # Verify system is working
+            self._verify_bootstrap()
 
-        print("✅ Memory system bootstrap complete!")
-        print("🎯 AI now has persistent memory capabilities")
-        print("=" * 60)
+            # Mark bootstrap as complete
+            self._mark_bootstrap_complete()
 
-        # Enable automatic memory capture
-        if self.auto_capture_enabled:
-            self._enable_auto_capture()
+            print("✅ Memory system bootstrap complete!")
+            print("🎯 AI now has persistent memory capabilities")
+            print("=" * 60)
+
+            # Enable automatic memory capture
+            if self.auto_capture_enabled:
+                self._enable_auto_capture()
 
         return self.integration
 
@@ -473,6 +482,23 @@ python quick_memory.py stats
         ]
 
         print(f"🧹 Cleaned up automatic captures, keeping {len(self.captured_insights)} recent insights")
+
+    def _is_bootstrap_complete(self) -> bool:
+        """
+        Check if bootstrap has been completed previously
+
+        Returns:
+            True if bootstrap is already complete
+        """
+        return self.bootstrap_state_file.exists()
+
+    def _mark_bootstrap_complete(self):
+        """Mark bootstrap as completed by creating a state file"""
+        try:
+            self.bootstrap_state_file.write_text(datetime.now().isoformat())
+            print(f"✅ Bootstrap completion marked ({self.bootstrap_state_file})")
+        except Exception as e:
+            print(f"⚠️  Failed to mark bootstrap complete: {e}")
 
     def get_memory_saving_reminder(self) -> str:
         """

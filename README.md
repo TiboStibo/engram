@@ -53,7 +53,9 @@ pip install transformers sentence-transformers dataclasses-json
 
 ### 🚀 Bootstrap for New Conversations
 
-**Always run this at the start of new conversations:**
+**Bootstrap now runs automatically** at the start of every new conversation when the memory system is initialized. The system automatically detects if bootstrap is needed and runs it seamlessly.
+
+For manual bootstrap or system setup:
 
 ```bash
 # One-command bootstrap (recommended)
@@ -64,7 +66,7 @@ source .venv/bin/activate
 python bootstrap_memory.py
 ```
 
-**This loads essential memories about how to use the system, ensuring persistent self-awareness even from fresh instances.**
+**The system now automatically maintains persistent self-awareness across all conversations through automatic bootstrap enforcement.**
 
 ### 💻 Cursor IDE Integration
 
@@ -302,6 +304,7 @@ This project tracks significant self-improvement achievements through git commit
 - ✅ **Autonomous Milestone System** - AI independently commits improvements when thresholds are met
 - ✅ **Bootstrap Memory Seeding** - Automatically marks core memories as integrated for better metrics
 - ✅ **Memory Discipline Protocol** - Bootstrap-level enforcement of memory retention and insight capture
+- ✅ **Automatic Bootstrap Enforcement** - Every new conversation automatically runs bootstrap to ensure persistent self-awareness
 
 ### System Architecture Overview
 
