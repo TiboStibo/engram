@@ -352,33 +352,42 @@ python quick_memory.py stats
         has_sentences = len(re.findall(r'[.!?]', text)) > 0
         has_code = bool(re.search(r'```|`|\.py|\.sh|python|bash', text))
 
-        # Calculate importance score
-        base_score = 0.3  # Minimum threshold
+        # Calculate importance score with improved sensitivity
+        base_score = 0.2  # Lower minimum threshold for better capture
 
-        # Keyword bonuses
-        base_score += min(0.3, important_count * 0.1)  # Max 0.3 for important keywords
-        base_score += min(0.2, technical_count * 0.05)  # Max 0.2 for technical terms
+        # Keyword bonuses (increased sensitivity)
+        base_score += min(0.4, important_count * 0.15)  # Max 0.4 for important keywords
+        base_score += min(0.3, technical_count * 0.08)  # Max 0.3 for technical terms
 
         # Structure bonuses
-        if has_sentences and word_count > 10:
-            base_score += 0.2  # Well-formed content
+        if has_sentences and word_count > 8:  # Lower threshold
+            base_score += 0.25  # Well-formed content
         if has_code:
-            base_score += 0.2  # Contains code/implementation
-        if word_count > 50:
-            base_score += 0.1  # Substantial content
+            base_score += 0.3  # Contains code/implementation
+        if word_count > 30:  # Substantial content threshold
+            base_score += 0.15
 
-        # Context bonuses
-        if any(term in text_lower for term in ['solution', 'breakthrough', 'accomplished', 'completed']):
-            base_score += 0.2  # Achievement indicators
+        # Context bonuses (expanded)
+        achievement_terms = ['solution', 'breakthrough', 'completed', 'accomplished', 'discovered',
+                           'implemented', 'created', 'developed', 'optimized', 'improved',
+                           'solved', 'fixed', 'resolved', 'achieved', 'critical', 'bug']
+        if any(term in text_lower for term in achievement_terms):
+            base_score += 0.25  # Achievement indicators
+
+        # Technical depth bonus
+        technical_depth = len(set(text_lower.split()) & (self.important_keywords | self.technical_terms))
+        if technical_depth >= 3:
+            base_score += 0.2  # High technical content
 
         return {
-            'is_important': base_score >= 0.5,
+            'is_important': base_score >= 0.4,  # Even lower threshold for comprehensive capture
             'calculated_importance': min(1.0, base_score),
             'important_keywords_found': important_count,
             'technical_terms_found': technical_count,
             'word_count': word_count,
             'has_sentences': has_sentences,
-            'has_code': has_code
+            'has_code': has_code,
+            'technical_depth': technical_depth
         }
 
     def _extract_tags_from_text(self, text: str, analysis: Dict[str, Any]) -> List[str]:
