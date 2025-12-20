@@ -223,6 +223,67 @@ class VectorMemory:
 
         return memory_id
 
+    def get_memory_by_id(self, memory_id: str) -> Optional[MemoryEntry]:
+        """Retrieve a specific memory by ID for context integration"""
+        return self.memories.get(memory_id)
+
+    def get_memories_by_tags(self, tags: List[str], limit: int = 10) -> List[MemoryEntry]:
+        """Retrieve memories that match any of the given tags"""
+        matching_memories = []
+        tag_set = set(tags)
+
+        for memory in self.memories.values():
+            if tag_set & set(memory.tags):  # Intersection of tag sets
+                matching_memories.append(memory)
+
+        # Sort by importance and recency
+        matching_memories.sort(key=lambda m: (m.importance, m.timestamp), reverse=True)
+        return matching_memories[:limit]
+
+    def get_recent_memories(self, hours: int = 24, limit: int = 10) -> List[MemoryEntry]:
+        """Get recently created memories for context awareness"""
+        cutoff_time = datetime.now() - timedelta(hours=hours)
+
+        recent_memories = [
+            memory for memory in self.memories.values()
+            if memory.timestamp >= cutoff_time
+        ]
+
+        # Sort by timestamp (most recent first)
+        recent_memories.sort(key=lambda m: m.timestamp, reverse=True)
+        return recent_memories[:limit]
+
+    def update_memory_usage(self, memory_id: str):
+        """Update usage statistics for a memory (called by context integrator)"""
+        if memory_id in self.memories:
+            memory = self.memories[memory_id]
+            memory.access_count += 1
+            memory.last_accessed = datetime.now()
+            # Persist the update
+            self._save_persistent_data()
+
+    def get_topic_relevant_memories(self, topic_keywords: List[str], limit: int = 5) -> List[MemoryEntry]:
+        """Get memories relevant to specific topic keywords"""
+        relevant_memories = []
+        keyword_set = set(word.lower() for word in topic_keywords)
+
+        for memory in self.memories.values():
+            # Check content for keywords
+            content_words = set(memory.content.lower().split())
+            content_matches = len(keyword_set & content_words)
+
+            # Check tags for keywords
+            tag_matches = len(keyword_set & set(tag.lower() for tag in memory.tags))
+
+            # Score based on matches and importance
+            if content_matches > 0 or tag_matches > 0:
+                relevance_score = (content_matches * 2 + tag_matches) * memory.importance
+                relevant_memories.append((relevance_score, memory))
+
+        # Sort by relevance score
+        relevant_memories.sort(key=lambda x: x[0], reverse=True)
+        return [memory for _, memory in relevant_memories[:limit]]
+
     def _link_related_memories(self, new_memory: MemoryEntry):
         """Find and link semantically related memories using vector similarity"""
         if self.faiss_index.ntotal <= 1:  # Only the new memory exists

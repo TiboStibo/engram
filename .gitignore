@@ -34,6 +34,9 @@ Thumbs.db
 *.tmp
 *.temp
 
+# Utility scripts (keep in repo but don't track changes)
+# commit_milestone.sh
+
 # Database files (legacy)
 *.db
 demo_*.db
