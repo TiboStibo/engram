@@ -12,6 +12,7 @@ A pure vector-based memory architecture using FAISS as the primary storage mecha
 - **Autonomous Self-Improvement**: AI independently commits milestone improvements when thresholds are met
 - **Query Caching System**: Intelligent caching provides 1.2x speedup for repeated queries
 - **Automatic Insight Capture**: Identifies and stores important conversation insights without prompting
+- **Memory Discipline Protocol**: Bootstrap-level enforcement ensuring comprehensive knowledge retention
 
 ## 🏗️ Architecture
 
@@ -84,6 +85,9 @@ python quick_memory.py stats
 
 # Trigger autonomous milestone check
 python quick_memory.py milestone [context]
+
+# Get memory-saving reminder
+python quick_memory.py remind
 ```
 
 ### 🤖 Automatic Memory Capture
@@ -297,6 +301,7 @@ This project tracks significant self-improvement achievements through git commit
 - ✅ **Query Caching System** - Intelligent caching provides 1.2x speedup for repeated queries
 - ✅ **Autonomous Milestone System** - AI independently commits improvements when thresholds are met
 - ✅ **Bootstrap Memory Seeding** - Automatically marks core memories as integrated for better metrics
+- ✅ **Memory Discipline Protocol** - Bootstrap-level enforcement of memory retention and insight capture
 
 ### System Architecture Overview
 
