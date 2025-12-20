@@ -75,7 +75,26 @@ python conversation_memory_assistant.py --live
 
 # Add memories during conversation
 python quick_memory.py add "insight" "tags" 0.8
+
+# Check memory statistics
+python quick_memory.py stats
 ```
+
+### 🤖 Automatic Memory Capture
+
+**The system now automatically captures important insights:**
+
+- **Smart Analysis**: Detects important keywords, technical terms, and achievements
+- **Context Awareness**: Analyzes conversation content for valuable information
+- **Seamless Operation**: Captures insights without interrupting conversations
+- **Adaptive Learning**: Improves capture accuracy over time
+
+**Automatic capture triggers on:**
+- Technical discoveries and breakthroughs
+- Implementation details and solutions
+- Important insights and learnings
+- Achievement announcements
+- Complex problem resolutions
 
 ### Hardware Compatibility ✅
 
@@ -261,6 +280,7 @@ This project tracks significant self-improvement achievements through git commit
 - ✅ **Hardware Optimization** - CPU-optimized for Intel i7-6600U, AVX2 support, memory-efficient
 - ✅ **Memory Context Integration** - Complete pipeline for context-aware memory retrieval and integration
 - ✅ **Adaptive Learning System** - Usage-based relevance scoring and performance optimization
+- ✅ **Automatic Memory Capture** - Intelligent system that identifies and stores important insights without prompting
 - ✅ **Self-Documentation** - Automated milestone tracking and comprehensive testing
 
 ### System Architecture Overview
