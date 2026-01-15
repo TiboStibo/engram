@@ -43,9 +43,9 @@ class ExtractedMemory:
 EXTRACTION_PROMPT = """Analyze this conversation exchange and extract factual information worth remembering.
 
 Exchange:
-{user_message}
+User message : {user_message}
 
-{assistant_response}
+Assistant response : {assistant_response}
 
 Extract memories as JSON. Preserve SPECIFIC details - these are critical for accurate recall.
 

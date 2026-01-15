@@ -36,8 +36,8 @@ class ProxyConfig:
     """Configuration for the memory proxy"""
     # Memory settings
     memory_path: str = "vector_memory"
-    max_memories_to_inject: int = 5
-    min_memory_importance: float = 0.2
+    max_memories_to_inject: int = 20
+    min_memory_importance: float = 0.3
     
     # LLM settings
     model: str = "gemini-2.0-flash"
@@ -45,12 +45,12 @@ class ProxyConfig:
     max_tokens: int = 4096
     
     # Context settings
-    memory_token_budget: int = 1000  # Max tokens for memory context
-    include_timestamps: bool = False
+    memory_token_budget: int = 4000  # Max tokens for memory context
+    include_timestamps: bool = True
     
     # Behavior
     extraction_enabled: bool = True
-    verbose: bool = False
+    verbose: bool = True
 
 
 class PassiveMemoryProxy:

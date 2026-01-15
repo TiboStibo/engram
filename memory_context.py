@@ -10,7 +10,7 @@ Key Features:
 - Adaptive context window management
 - Memory usage tracking and reinforcement learning
 - Seamless integration with conversation flow
-- Hardware-aware batch processing for efficiency
+- Hardware-aware batch processing for efficiency # What's that mean?
 """
 
 import json
