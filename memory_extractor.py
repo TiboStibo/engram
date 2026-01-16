@@ -40,17 +40,14 @@ class ExtractedMemory:
     source_context: str
 
 
-EXTRACTION_PROMPT = """Analyze this conversation exchange and extract factual information worth remembering.
-
-Exchange:
-User message : {user_message}
-
-Assistant response : {assistant_response}
+EXTRACTION_PROMPT = """
+You are a memory extraction agent. You act as the Mirokai Robot's subconscious.
+Analyze this conversation exchange and extract NEW factual information worth remembering.
 
 Extract memories as JSON. Preserve SPECIFIC details - these are critical for accurate recall.
 
 MUST preserve:
-- DATES and TIMES - CONVERT relative dates to absolute when possible!
+- DATES and TIMES - CONVERT relative dates to absolute when possible! All memories should be
   - If message says "[May 8, 2023] yesterday" → store as "May 7, 2023"
   - If message says "[May 25, 2023] last year" → store as "2022"
   - If message says "[June 9, 2023] next month" → store as "July 2023"
@@ -69,6 +66,33 @@ DO extract:
 DON'T extract:
 - Generic greetings or small talk
 - Vague acknowledgments without substance
+- Information already present in the CONTEXT section above.
+
+CONTEXT (Injected Memories):
+{injected_memories}
+(DO NOT create new memories from the context above - this is what the robot already knows.)
+
+CONVERSATION HISTORY:
+{conversation_history}
+(This is the past conversation leading up to the current exchange. This is what the robot already knows.)
+
+EXCHANGE:
+User message : {user_message}
+(New information here should be added to memory)
+
+Robot response : {assistant_response}
+(New information here should be added to memory)
+
+TO UPDATE AN EXISTING MEMORY:
+If the user or robot explicitly updates, corrects, or expands on a memory shown in CONTEXT, use "modifies": ID.
+Example: If [ID: 3] says "User likes apples" and user says "I actually hate apples", return:
+{{
+  "content": "User hates apples",
+  "modifies": 3,
+  "type": "preference"
+}}
+
+
 
 Return JSON only, no markdown:
 {{
@@ -79,7 +103,8 @@ Return JSON only, no markdown:
       "type": "fact|event|preference|identity|relationship",
       "importance": 0.0-1.0,
       "tags": ["relevant", "tags"],
-      "confidence": 0.0-1.0
+      "confidence": 0.0-1.0,
+      "modifies": optional_integer_id
     }}
   ],
   "reasoning": "brief explanation"
@@ -175,10 +200,10 @@ class MemoryExtractor:
                 if item is None:  # Sentinel to stop
                     break
                 
-                user_msg, assistant_msg, callback = item
+                user_msg, assistant_msg, injected_mems, history, i_map, callback = item
                 
                 try:
-                    memories = self._extract_memories_sync(user_msg, assistant_msg)
+                    memories = self._extract_memories_sync(user_msg, assistant_msg, injected_mems, history, i_map)
                     
                     # Store extracted memories
                     for memory in memories:
@@ -197,7 +222,8 @@ class MemoryExtractor:
                 continue
     
     def extract_async(self, user_message: str, assistant_response: str, 
-                     callback: callable = None):
+                     injected_memories: str = None, conversation_history: List[Dict[str, str]] = None, 
+                     injection_map: Dict[int, str] = None, callback: callable = None):
         """
         Queue an exchange for async memory extraction.
         
@@ -211,10 +237,13 @@ class MemoryExtractor:
             self.start_worker()
         
         # Queue for extraction
-        self.extraction_queue.put((user_message, assistant_response, callback))
+        self.extraction_queue.put((user_message, assistant_response, injected_memories, conversation_history, injection_map, callback))
     
-    def _extract_memories_sync(self, user_message: str, 
-                               assistant_response: str) -> List[ExtractedMemory]:
+    def _extract_memories_sync(self, user_message: str,
+                               assistant_response: str,
+                               injected_memories: str = None,
+                               conversation_history: List[Dict[str, str]] = None,
+                               injection_map: Dict[int, str] = None) -> List[ExtractedMemory]:
         """
         Synchronously extract memories from an exchange.
         
@@ -226,17 +255,33 @@ class MemoryExtractor:
         
         # Use LLM extraction if available
         if self.client:
-            return self._extract_with_llm(user_message, assistant_response)
+            return self._extract_with_llm(user_message, assistant_response, injected_memories, conversation_history, injection_map)
         else:
             return self._extract_with_heuristics(user_message, assistant_response)
     
     def _extract_with_llm(self, user_message: str, 
-                          assistant_response: str) -> List[ExtractedMemory]:
+                          assistant_response: str,
+                          injected_memories: str = None,
+                          conversation_history: List[Dict[str, str]] = None,
+                          injection_map: Dict[int, str] = None) -> List[ExtractedMemory]:
         """Extract memories using Gemini LLM"""
         try:
+            injected_context = injected_memories if injected_memories else "No previous context injected."
+            
+            # Format history
+            history_str = "No previous history."
+            if conversation_history:
+                history_lines = []
+                for msg in conversation_history:
+                    role_name = "Robot" if msg.get("role") in ["model", "assistant"] else "User"
+                    history_lines.append(f"{role_name}: {msg.get('content', '')}")
+                history_str = "\n".join(history_lines)
+
             prompt = EXTRACTION_PROMPT.format(
                 user_message=user_message[:2000],  # Limit length
-                assistant_response=assistant_response[:2000]
+                assistant_response=assistant_response[:2000],
+                injected_memories=injected_context[:3000], # Limit context length
+                conversation_history=history_str[:5000] # Limit history length
             )
             
             response = self.client.models.generate_content(
@@ -265,7 +310,18 @@ class MemoryExtractor:
                 return []
             
             memories = []
-            for mem_data in data.get("memories", []):
+            raw_memories = data.get("memories", [])
+            
+            # # SAFEGUARD: Volume Warning
+            # if len(raw_memories) > 10:
+            #     self._queue_message(f"MemMan: ⚠️  Warning: High volume extraction ({len(raw_memories)} items). Checking context...")
+                
+            # # SAFEGUARD: Hard Limit
+            # if len(raw_memories) > 15:
+            #     self._queue_message(f"MemMan: 🛑  Safety Limit: Truncating {len(raw_memories)} -> 15 memories")
+            #     raw_memories = raw_memories[:15]
+            
+            for mem_data in raw_memories:
                 memory = ExtractedMemory(
                     content=mem_data.get("content", ""),
                     importance=float(mem_data.get("importance", 0.5)),
@@ -274,6 +330,36 @@ class MemoryExtractor:
                     confidence=float(mem_data.get("confidence", 0.7)),
                     source_context="conversation"
                 )
+                
+                # Handle modification request
+                mod_id_raw = mem_data.get("modifies")
+                mod_id = None
+                
+                if mod_id_raw is not None:
+                    # STRICT PARSING Logic
+                    try:
+                        # Case 1: Clean integer
+                        mod_id = int(str(mod_id_raw))
+                    except ValueError:
+                        # Case 2: Dirty string (e.g., "ID: 3", "#3")
+                        import re
+                        digits = re.findall(r'\d+', str(mod_id_raw))
+                        if digits:
+                            if len(digits) > 1 or len(re.sub(r'\d', '', str(mod_id_raw)).strip()) > 0:
+                                self._queue_message(f"MemMan: ⚠️  Warning: ambiguous ID format '{mod_id_raw}'. Using extracted number '{digits[0]}'.")
+                            mod_id = int(digits[0])
+                        else:
+                             self._queue_message(f"MemMan: 🛑 Error: Invalid modification ID '{mod_id_raw}'. Ignoring modification request.")
+                             mod_id = None
+
+                if mod_id and injection_map:
+                    real_id = injection_map.get(mod_id)
+                    if real_id:
+                        setattr(memory, 'modifies_memory_id', real_id)
+
+
+
+                
                 if memory.content:
                     memories.append(memory)
             
@@ -374,7 +460,45 @@ class MemoryExtractor:
         if memory.memory_type not in tags:
             tags.append(memory.memory_type)
         
+        if memory.memory_type not in tags:
+            tags.append(memory.memory_type)
+        
+
+
         try:
+            # Check if this is a modification of an existing memory
+            if hasattr(memory, 'modifies_memory_id') and memory.modifies_memory_id:
+                real_id = memory.modifies_memory_id
+                
+                # Retrieve old content for logging purpose
+                old_content = "Unknown"
+                if real_id in self.memory_system.memories:
+                    old_content = self.memory_system.memories[real_id].content
+
+                success = self.memory_system.update_memory(
+                    memory_id=real_id,
+                    content=memory.content,
+                    tags=tags, # Use the potentially updated tags
+                    importance=adjusted_importance # Use the adjusted importance
+                )
+                if success:
+                     self._queue_message(f"MemMan: ✏️  Modified : '{old_content}' -> '{memory.content}'")
+                     
+                     # Log activity for visualizer
+                     stored_memory = self.memory_system.memories.get(real_id)
+                     self._log_activity("memory_updated", {
+                         "memory_id": real_id,
+                         "content": memory.content[:80],
+                         "old_content": old_content[:80],
+                         "importance": adjusted_importance,
+                         "type": memory.memory_type,
+                         "tags": tags,
+                         "access_count": stored_memory.access_count if stored_memory else 1
+                     })
+                     return
+                else:
+                     self._queue_message(f"MemMan: ⚠️ Could not update memory [{real_id[:8]}], falling back to create.")
+
             memory_id = self.memory_system.store_memory(
                 content=memory.content,
                 importance=adjusted_importance,
@@ -409,9 +533,9 @@ class MemoryExtractor:
                 acc = stats.get('access_count', stored_memory.access_count if stored_memory else 1)
                 old_imp = stats.get('old_importance', adjusted_importance)
                 new_imp = stats.get('new_importance', adjusted_importance)
-                self._queue_message(f"MemMan: 🔄 Reinforced (acc:{acc}, imp:{old_imp:.2f}→{new_imp:.2f}): {memory.content[:40]}...")
+                self._queue_message(f"MemMan: 🔄 Reinforced (acc:{acc}, imp:{old_imp:.2f}→{new_imp:.2f}): {memory.content}")
             else:
-                self._queue_message(f"MemMan: 💾 New (imp:{adjusted_importance:.2f}): {memory.content[:50]}...")
+                self._queue_message(f"MemMan: 💾 New (imp:{adjusted_importance:.2f}): {memory.content}")
         except Exception as e:
             self._log_activity("store_error", {"error": str(e), "content": memory.content[:50]})
             self._queue_message(f"MemMan: ⚠️  Failed to store memory: {e}")

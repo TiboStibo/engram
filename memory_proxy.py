@@ -11,9 +11,12 @@ Usage:
     response = proxy.chat("Your message here")
 """
 
+import sys
+import threading
+import time
 import os
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Optional, List, Dict, Tuple, Any
 from dataclasses import dataclass
 
 from engram_pkg import VectorMemory
@@ -47,6 +50,7 @@ class ProxyConfig:
     # Context settings
     memory_token_budget: int = 4000  # Max tokens for memory context
     include_timestamps: bool = True
+    retrieval_enabled: bool = True
     
     # Behavior
     extraction_enabled: bool = True
@@ -127,49 +131,61 @@ When you receive context from previous conversations, treat this as YOUR memory 
         """Set the base system prompt (memory context will be prepended)"""
         self.system_prompt = prompt
     
-    def _get_memory_context(self, user_message: str) -> str:
+    def _get_memory_context(self, user_message: str) -> Tuple[str, Dict[int, str]]:
         """
-        Get relevant memories formatted for context injection.
-        
-        This is the SYNCHRONOUS retrieval step - must complete before LLM call.
+        Retrieve relevant memories and format them for the LLM.
+        Returns tuple of (context_string, injection_id_map)
         """
         # Search for relevant memories
+        # Improve query context by including the last robot message
+        query = user_message
+        if self.conversation_history:
+            last_msg = self.conversation_history[-1]
+            if last_msg["role"] in ["model", "assistant"]:
+                # Combine last robot context with user query
+                query = f"{last_msg['content']} {user_message}"
+        
         memories = self.memory.memory_system.retrieve_memory(
-            query=user_message,
+            query=query,
             limit=self.config.max_memories_to_inject,
             min_importance=self.config.min_memory_importance
         )
         
         if not memories:
-            return ""
+            return "", {}
         
-        # Format memories for injection
-        memory_lines = []
+        # Format for context window with temporary IDs for modification
+        context_parts = []
+        injection_map = {}
         total_chars = 0
         char_budget = self.config.memory_token_budget * 4  # Rough chars per token
         
-        for mem in memories:
-            line = f"• {mem.content}"
+        for i, mem in enumerate(memories, 1):
+            # Store mapping: temp_id (int) -> real_id (str)
+            injection_map[i] = mem.id
+            
+            # Format: [ID: 1] Memory content...
+            line = f"[ID: {i}] {mem.content}"
             if self.config.include_timestamps:
                 line += f" (from {mem.timestamp.strftime('%Y-%m-%d')})"
             
             if total_chars + len(line) > char_budget:
                 break
             
-            memory_lines.append(line)
+            context_parts.append(line)
             total_chars += len(line)
             self.stats["memories_injected"] += 1
         
-        if not memory_lines:
-            return ""
+        if not context_parts:
+            return "", {}
         
         self.stats["tokens_used_for_memory"] += total_chars // 4
         
         context = "## Your memories:\n"
-        context += "\n".join(memory_lines)
+        context += "\n".join(context_parts)
         context += "\n\nThese are things you remember. Use them naturally when relevant to help the user."
         
-        return context
+        return context, injection_map
     
     def _build_system_with_memory(self, memory_context: str) -> str:
         """Build the system prompt with memory context"""
@@ -193,12 +209,22 @@ When you receive context from previous conversations, treat this as YOUR memory 
         self.stats["messages_processed"] += 1
         
         # ═══════════════════════════════════════════════════════════
-        # STEP 1: RETRIEVE MEMORIES (synchronous, ~10-50ms)
+        # STEP 2: GET MEMORY CONTEXT (Synchronous)
         # ═══════════════════════════════════════════════════════════
-        memory_context = self._get_memory_context(user_message)
+        if self.config.retrieval_enabled:
+            memory_context, injection_map = self._get_memory_context(user_message)
+        else:
+            memory_context = ""
+            injection_map = {}
         
         if self.config.verbose and memory_context:
-            print(f"📚 Injecting {memory_context.count('•')} memories into context")
+            count = memory_context.count('[ID:')
+            print(f"\033[1;36mMemMan:\033[0m 📚 Injecting {count} memories into context")
+            # In verbose mode, print the actual memories being injected
+            lines = memory_context.split('\n')
+            for line in lines:
+                if line.strip().startswith('[ID:'):
+                    print(f"   {line.strip()}")
         
         # ═══════════════════════════════════════════════════════════
         # STEP 2: BUILD SYSTEM PROMPT WITH MEMORY
@@ -263,7 +289,17 @@ When you receive context from previous conversations, treat this as YOUR memory 
         # STEP 6: EXTRACT MEMORIES (async, non-blocking)
         # ═══════════════════════════════════════════════════════════
         if self.config.extraction_enabled:
-            self.extractor.extract_async(user_message, assistant_message)
+            # Pass the memories that were injected so MemMan knows context
+            # Pass history excluding the current exchange (last 2 messages)
+            history_to_pass = self.conversation_history[:-2] if len(self.conversation_history) >= 2 else []
+            
+            self.extractor.extract_async(
+                user_message, 
+                assistant_message,
+                injected_memories=memory_context if memory_context else None,
+                conversation_history=history_to_pass,
+                injection_map=injection_map
+            )
         
         return assistant_message
     

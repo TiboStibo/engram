@@ -41,6 +41,7 @@ class MemoryEntry:
     related_memories: List[str] = field(default_factory=list)  # IDs of related memories
     embedding: List[float] = field(default_factory=list)  # Vector embedding (required for vector DB)
     faiss_index: int = -1  # Position in FAISS index
+    archived: bool = False  # Soft delete flag
 
 
 class VectorMemory:
@@ -436,6 +437,145 @@ class VectorMemory:
         # Sort by relevance score
         relevant_memories.sort(key=lambda x: x[0], reverse=True)
         return [memory for _, memory in relevant_memories[:limit]]
+    
+    def archive_memory(self, memory_id: str) -> bool:
+        """
+        Soft-delete a memory: remove from index but keep in storage with archived=True.
+        """
+        if memory_id not in self.memories:
+            return False
+        
+        memory = self.memories[memory_id]
+        if memory.archived:
+            return True # Already archived
+            
+        memory.archived = True
+        
+        # Remove from FAISS index and mappings
+        # Since FAISS doesn't support easy deletion, we'll mark as pending changes
+        # which will trigger a rebuild on next save/operation that needs it.
+        # However, for immediate effect, we SHOULD rebuild or manage indices.
+        # Given _rebuild_index_with_memories logic, let's just trigger a rebuild 
+        # to ensure it's immediately "gone" from search.
+        
+        # Or better (cheaper): we could just leave it in FAISS but filter outcomes.
+        # But retrieve_memory uses FAISS results directly. 
+        # Let's rebuild the index for consistency and to truly "forget".
+        # Depending on volume this might be expensive. 
+        # Optimization: We'll rebuild immediately for now as volume is small (<10k).
+        
+        self._rebuild_index_with_memories(list(self.memories.values()))
+        self.pending_changes = True
+        
+        print(f"🗑️  Archived memory {memory_id}")
+        return True
+
+    def get_archived_memories(self) -> List[MemoryEntry]:
+        """
+        Retrieve all archived memories for viewing/management.
+        
+        Returns:
+            List of archived MemoryEntry objects, sorted by timestamp (newest first)
+        """
+        archived = [m for m in self.memories.values() if m.archived]
+        archived.sort(key=lambda m: m.timestamp, reverse=True)
+        return archived
+    
+    def get_active_memories(self) -> List[MemoryEntry]:
+        """
+        Retrieve all non-archived memories for viewing.
+        
+        Returns:
+            List of active MemoryEntry objects, sorted by timestamp (newest first)
+        """
+        active = [m for m in self.memories.values() if not m.archived]
+        active.sort(key=lambda m: m.timestamp, reverse=True)
+        return active
+
+    def unarchive_memory(self, memory_id: str) -> bool:
+        """
+        Restore an archived memory back to active status.
+        
+        Args:
+            memory_id: ID of the memory to unarchive
+            
+        Returns:
+            True if successfully unarchived, False if not found or not archived
+        """
+        if memory_id not in self.memories:
+            return False
+        
+        memory = self.memories[memory_id]
+        if not memory.archived:
+            return True  # Already active
+        
+        memory.archived = False
+        
+        # Re-add to FAISS index
+        embedding_array = np.array([memory.embedding], dtype=np.float32)
+        faiss.normalize_L2(embedding_array)
+        self.faiss_index.add(embedding_array)
+        
+        # Update index mappings
+        new_faiss_idx = self.faiss_index.ntotal - 1
+        memory.faiss_index = new_faiss_idx
+        self.id_to_idx[memory_id] = new_faiss_idx
+        self.idx_to_id[new_faiss_idx] = memory_id
+        
+        self.pending_changes = True
+        
+        print(f"♻️  Unarchived memory {memory_id}")
+        return True
+
+    def update_memory(self, memory_id: str, content: str = None, 
+                      tags: List[str] = None, importance: float = None) -> bool:
+        """
+        Update an existing memory with new content, tags, or importance.
+        Handles vector re-indexing if content changes.
+        """
+        if memory_id not in self.memories:
+            return False
+        
+        memory = self.memories[memory_id]
+        
+        # Update fields if provided
+        if importance is not None:
+            memory.importance = importance
+        
+        if tags is not None:
+            memory.tags = tags
+            
+        # Handle content update (requires re-embedding)
+        if content is not None and content != memory.content:
+            memory.content = content
+            # Re-calculate embedding
+            new_embedding = self.encoder.encode(content, batch_size=self.batch_size).tolist()
+            memory.embedding = new_embedding
+            
+            # NOTE: We can't easily "remove" the old vector from the flat index without 
+            # rebuilding it, so we leave it as "dead" space until the next rebuild.
+            # We simply add the new vector and update the index mapping.
+            
+            embedding_array = np.array([new_embedding], dtype=np.float32)
+            faiss.normalize_L2(embedding_array)
+            self.faiss_index.add(embedding_array)
+            
+            # Update index mapping to point to the new vector position
+            new_faiss_idx = self.faiss_index.ntotal - 1
+            
+            # Clean up old mapping
+            old_faiss_idx = memory.faiss_index
+            if old_faiss_idx in self.idx_to_id:
+                del self.idx_to_id[old_faiss_idx]
+                
+            # Set new mapping
+            memory.faiss_index = new_faiss_idx
+            self.id_to_idx[memory_id] = new_faiss_idx
+            self.idx_to_id[new_faiss_idx] = memory_id
+            
+        memory.last_accessed = datetime.now()
+        self.pending_changes = True
+        return True
 
     def _link_related_memories(self, new_memory: MemoryEntry):
         """Find and link semantically related memories using vector similarity"""
@@ -982,22 +1122,30 @@ class VectorMemory:
         new_id_to_idx = {}
         new_idx_to_id = {}
 
-        # Add memories back to index
-        embeddings = []
+        # Separate active and archived memories
+        active_memories = []
         for memory in keep_memories:
-            embeddings.append(memory.embedding)
-            new_memories[memory.id] = memory
+            new_memories[memory.id] = memory  # Keep ALL memories in storage
+            if not memory.archived:
+                active_memories.append(memory)
 
-        if embeddings:
+        # Add only active memories to FAISS index
+        if active_memories:
+            embeddings = [m.embedding for m in active_memories]
             embeddings_array = np.array(embeddings, dtype=np.float32)
             faiss.normalize_L2(embeddings_array)
             new_faiss_index.add(embeddings_array)
 
-            # Update mappings
-            for i, memory in enumerate(keep_memories):
+            # Update mappings for active memories only
+            for i, memory in enumerate(active_memories):
                 memory.faiss_index = i
                 new_id_to_idx[memory.id] = i
                 new_idx_to_id[i] = memory.id
+
+        # Clear FAISS index for archived memories
+        for memory in keep_memories:
+            if memory.archived:
+                memory.faiss_index = -1
 
         # Replace current structures
         self.faiss_index = new_faiss_index

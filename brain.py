@@ -89,7 +89,7 @@ def interactive_chat(proxy: PassiveMemoryProxy):
     """Run interactive chat session"""
     print_banner()
     
-    memory_count = len(proxy.memory.memory_system.memories)
+    memory_count = len(proxy.memory.memory_system.get_active_memories())
     print(f"📚 Loaded {memory_count} memories from previous sessions")
     print("💡 Type /help for commands, or just start chatting!\n")
     
@@ -160,11 +160,11 @@ def interactive_chat(proxy: PassiveMemoryProxy):
                 
                 continue
             
-            # Regular chat message
-            print("\033[1;33mAssistant:\033[0m ", end="", flush=True)
-            
             # Get response (with automatic memory injection)
             response = proxy.chat(user_input)
+            
+            # Regular chat message
+            print("\033[1;33mRobot:\033[0m ", end="", flush=True)
             print(response)
             print()
             
